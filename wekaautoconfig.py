@@ -787,7 +787,10 @@ reference_host = serverinfo.hosts.values()[0]            # actually now a dict
 for hostname, host in serverinfo.hosts.items():
     # the easy stuff - same cores & memory?  Number of ip interfaces and drives?
 
-    if (reference_host.total_cores != host.total_cores) or (reference_host.usable_cores != host.usable_cores) or (reference_host.memory != host.memory) or (reference_host.usable_mem != host.usable_mem) or (len( reference_host.ipifs ) != len( host.ipifs )) or (len( reference_host.drives ) != len( host.drives )):
+    if ((reference_host.total_cores != host.total_cores) or (reference_host.usable_cores != host.usable_cores) or 
+            (int(reference_host.memory/100) != int(host.memory/100)) or 
+            (int(reference_host.usable_mem/100) != int(host.usable_mem/100)) or 
+            (len( reference_host.ipifs ) != len( host.ipifs )) or (len( reference_host.drives ) != len( host.drives ))):
         is_identical = False
         print "There appears to be a mismatch between this host and the Reference Host:"
         print "Hostname " + host.name + "(ref=" + reference_host.name + ")"
