@@ -167,7 +167,7 @@ fi
 # check rt_tables
 echo "Setting Route Tables"
 grep weka1 /etc/iproute2/rt_tables &> /dev/null
-if [ $? != 0 ]; then
+if [ $? != 1 ]; then
     errmsg "/etc/iproute2/rt_tables seems to already have weka entries"
 else
     echo "100 weka1" >> /etc/iproute2/rt_tables
