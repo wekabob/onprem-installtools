@@ -160,7 +160,7 @@ echo "Setting Rule Scripts for $NIC2"
 if [ -f $NET_SCRIPTS/rule-$NIC2 ]; then
     errmsg "$NET_SCRIPTS/rule-$NIC2 already exists.  Skipping"
 else
-    echo "table weka1 from $NIC2_IP" > $NET_SCRIPTS/rule-$NIC2
+    echo "table weka2 from $NIC2_IP" > $NET_SCRIPTS/rule-$NIC2
 fi
 
 
