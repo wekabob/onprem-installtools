@@ -128,6 +128,7 @@ fi
 #exit
 
 # check for route scripts
+echo "Setting Route Scripts for $NIC1"
 if [ -f $NET_SCRIPTS/route-$NIC1 ]; then
     errmsg "$NET_SCRIPTS/route-$NIC1 already exists.  Skipping"
 else
@@ -136,20 +137,26 @@ else
         echo "default via $GATEWAY1 dev $NIC1 table weka1" >> $NET_SCRIPTS/route-$NIC1
     fi
 fi
+
+echo "Setting Route Scripts for $NIC2"
 if [ -f $NET_SCRIPTS/route-$NIC2 ]; then
     errmsg "$NET_SCRIPTS/route-$NIC2 already exists.  Skipping"
 else
     echo "$NIC2_NET dev $NIC2 src $NIC2_IP table weka2" > $NET_SCRIPTS/route-$NIC2
     if [ "$GATEWAY2" != "" ]; then
-        echo "default via $GATEWAY2 dev $NIC2 table weka1" >> $NET_SCRIPTS/route-$NIC2
+        echo "default via $GATEWAY2 dev $NIC2 table weka2" >> $NET_SCRIPTS/route-$NIC2
+    fi
 fi
 
 # check for rule scripts
+echo "Setting Rule Scripts for $NIC1"
 if [ -f $NET_SCRIPTS/rule-$NIC1 ]; then
     errmsg "$NET_SCRIPTS/rule-$NIC1 already exists.  Skipping"
 else
     echo "table weka1 from $NIC1_IP" > $NET_SCRIPTS/rule-$NIC1
 fi
+
+echo "Setting Rule Scripts for $NIC2"
 if [ -f $NET_SCRIPTS/rule-$NIC2 ]; then
     errmsg "$NET_SCRIPTS/rule-$NIC2 already exists.  Skipping"
 else
@@ -158,6 +165,7 @@ fi
 
 
 # check rt_tables
+echo "Setting Route Tables"
 grep weka1 /etc/iproute2/rt_tables &> /dev/null
 if [ $? != 0 ]; then
     errmsg "/etc/iproute2/rt_tables seems to already have weka entries"
@@ -167,6 +175,7 @@ else
 fi
 
 # check if entries are in /etc/sysctl.conf, if not, put them there.
+echo "Setting arp in sysctl.conf"
 grep ^net.ipv4.conf.all.arp_filter /etc/sysctl.conf &> /dev/null
 if [ $? != 0 ]; then
     errmsg "Making entries in /etc/sysctl.conf"
