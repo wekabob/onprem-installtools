@@ -995,9 +995,9 @@ for hostname, host in sorted( cluster.hosts.items() ):
 
         # Figure optimal number of drive cores vs compute cores
         if max_drive_cores <= (host.usable_cores - host.fe_cores)/2:   # have at least as many compute cores as drive cores
-            optimal_drive_cores = max_drive_cores
+            optimal_drive_cores = int(max_drive_cores)
         else:
-            optimal_drive_cores = (max_drive_cores+1)/2     # 2 drives per core, but what about an odd number of drives? (add 1 to round up)
+            optimal_drive_cores = int((max_drive_cores+1)/2)     # 2 drives per core, but what about an odd number of drives? (add 1 to round up)
 
         # special case for aws i3.xlarge instances, which have only 1 core available
         if host.total_cores == 1:
