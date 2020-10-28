@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import os
 import json
 import argparse
@@ -33,11 +33,11 @@ for date, filelist in sorted( candidates.items() ):
         sizes[date] += stat.st_size
 
 if args.days == 0:
-    for date, size in sizes.items():
+    for date, size in sorted(sizes.items()):
         print( "    {}: size={} GB".format(date,int(size/1024/1024/1024)) )
 else:
     for index in range(0,int(args.days)):
-        day = list( sizes.keys() )[index]
+        day = list( sorted(sizes.keys()) )[index]
         files = candidates[day]
         print( "removing traces from {}".format( day ) )
         for file in files:
