@@ -510,18 +510,17 @@ def announce( text ):
 
 # Parse arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("host", help="a hostname; 6 or more are required to create a Weka cluster", nargs='+' )
+parser.add_argument("host", help="a hostname; 5 or more are required to create a Weka cluster", nargs='+' )
 parser.add_argument("--debug", dest='debug', action='store_true', help="enable debug output")
 parser.add_argument("--verbose", dest='verbose', action='store_true', help="enable verbose output")
 parser.add_argument("-o", "--outputfile", dest='outputfile', default=None, help="place commands in outputfile as they are executing")
 args = parser.parse_args()
 
-if len( args.host ) < 6:
-    print( "A minimum of 6 hosts must be specified." )
+if len(args.host) < 5 and not args.debug:
+    print( "A minimum of 5 hosts must be specified." )
     sys.exit( 1 )
 
 debug = args.debug
-outputfile = None
 
 
 #
@@ -537,9 +536,9 @@ if not args.verbose:
     print(  )
     print( "Analysing hosts..." )
 
-#if args.outputfile != None:
-#    print( "Output will be written to " + args.outputfile )
-#    print
+if args.outputfile != None and args.verbose:
+    print( "Output will be written to " + args.outputfile )
+    print
 
 #print( "hosts are: "  )
 #print( args.host )
@@ -580,6 +579,7 @@ for hostname in args.host:
 host_hardware={}
 if args.verbose:
     print()
+errors = False
 for hostname, host in sorted( cluster.hosts.items() ):      # loop through all hosts
     if args.verbose:
         print( "Fetching configuration of host " + hostname + "..." )
@@ -590,9 +590,17 @@ for hostname, host in sorted( cluster.hosts.items() ):      # loop through all h
     p = subprocess.Popen(cmd, stdout=PIPE, shell=True)
     output = p.stdout.read()
 
-    # import the JSON
-    hardware = json.loads(output)
-    host_hardware[hostname]=hardware
+    if len(output) == 0:
+        print(f"Unable to fetch config from host {hostname}")
+        errors = True
+    else:
+        # import the JSON
+        hardware = json.loads(output)
+        host_hardware[hostname]=hardware
+
+if errors:
+    print("Error fetching info from hosts.  Please resolve and re-run")
+    sys.exit(1)
 
 if args.verbose:
     print( "Hardware information fetch complete." )
@@ -611,11 +619,13 @@ if args.verbose:
 
 
 # version
-for hostname, host in serverinfo.hosts.items():
+#for hostname, host in serverinfo.hosts.items():
+for hostname, host in cluster.hosts.items():
     hostconfig = host_hardware[hostname]
 
     keylist = list(hostconfig.keys())
     host.wekaversion = hostconfig[keylist[0]]['version']
+    print(f"host {hostname} is version {host.wekaversion}")
 
 # make sure they're all at the same version.  This should never happen, but... ya never know, and it's easy to check
 baseversion=None
@@ -1038,51 +1048,85 @@ if args.verbose:
 #  dict of {network: [host...]}
 
 # take some notes... sort hosts by network
-clusternets = {}    # dict of {network:[hosts...]}
-for hostname, host in sorted( cluster.hosts.items() ):
-    for name, ipobj in sorted( host.ipifs.items() ):
-        net_list = clusternets.get( ipobj.network )
-        if net_list == None:
-            clusternets[ipobj.network] = [host]
-        else:
-            clusternets[ipobj.network].append( host )
+#clusternets = {}    # dict of {network:[hosts...]}  - a list of hosts on a network segment  (do I really need this?  should be all:all, no?)  maybe we should verify that they are all:all?
+#clusternet_ips = {}    # dict of {network:[hosts...]} - a list of ips on a network segment
+#for hostname, host in sorted( cluster.hosts.items() ):
+#    for name, ipobj in sorted( host.ipifs.items() ):
+#        #net_list = clusternets.get( ipobj.network )
+#        #if net_list == None:
+#        if ipobj.network not in clusternets:
+#            clusternets[ipobj.network] = [host]
+#            clusternet_ips[ipobj.network] = [ipobj.ipaddr]
+#        else:
+#            clusternets[ipobj.network].append( host )
+#            clusternet_ips[ipobj.network].append(ipobj.ipaddr)
+#
+#print(f"clusternets={clusternets}")
+
+
+# new style to get gateways
+for hostname, host in sorted(cluster.hosts.items()):
+    for ifname, ipobj in sorted(host.ipifs.items()):    # for each ip interface...
+        # see if there is a gateway, and if so, record it
+        cmd = ["ssh", host.name, "sudo", "ip", "route", "get", "8.8.8.8", "oif", ifname]
+
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ret = p.wait()
+        for line in p.stdout:
+            linelist = line.split()
+            if linelist[0] == "8.8.8.8" and linelist[1] == "via":
+                ipobj.gateway = linelist[2]
+                print(f"gateway found for iface {ifname}: {ipobj.gateway}")
+                break       # move on to next interface
+                #continue
+
 
 #
 # determine what the gateways are if we have more than one network in the cluster
 #
-if len( clusternets ) > 1:
-    # select a target ip for each network - this is some funky logic
-    targets = {}    # dict of {network:target_ip}, where target_ip is an ip NOT on that network
-    for network, hostlist in clusternets.items():                   # go through the list of networks
-        for target_network, target_hostlist in clusternets.items(): # go through again, find a different network
-            if network != target_network:
-                ipname=next(iter(target_hostlist[0].ipifs))                     # take the first host's first ip addr on that network
-                targets[network] = target_hostlist[0].ipifs[ipname].ipaddr      # take the first host's first ip addr on that network
-                break                                                       # move on to next network 
+#if len(clusternets) > 1:
+#    # select a target ip for each network - this is some funky logic
+#    targets = {}    # dict of {network:target_ip}, where target_ip is an ip NOT on that network
+#    for network, hostlist in clusternets.items():                   # go through the list of networks
+#        for host in hostlist:   # loop through the hosts on the network
+#            for name, ipobj in sorted( host.ipifs.items() ): # loop through that hosts's ip interfaces
+#                if ipobj.network == network:    # is it on the network we're looking at?
+#
+#
+#
+        #for target_network, target_hostlist in clusternets.items(): # go through again, find a different network
+        #    print(f"{network}-{target_network}")
+        #    if network != target_network:
+        #        ipname=next(iter(target_hostlist[0].ipifs))                     # take the first host's first ip addr on that network
+        #        targets[network] = target_hostlist[0].ipifs[ipname].ipaddr      # take the first host's first ip addr on that network
+        #        break                                                       # move on to next network 
 
-    gateways = {}   # dict of {network:gateway}
-    for network, hostlist in clusternets.items():                   # go through the list of networks
-        for host in hostlist:
-            target_ip = targets[network]                            # get the target for this host
-            # ip route get "target" returns "172.172.2.3 via 172.172.1.1 dev ens2 src 172.172.1.200"
-            # which is 'target "via" gateway "dev" interface "src" source_ip
-            cmd = ["ssh", host.name, "sudo", "ip", "route", "get", target_ip]
-
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            ret = p.wait()
-            for line in p.stdout:
-                linelist = line.split()
-                if linelist[0] == target_ip and linelist[1] == "via":
-                    gateways[network] = linelist[2]
-                    break                   # all hosts on the same network should have the same gateway
-            
-            if gateways.get( network ) != None:     # make sure we got one, if not try another host (host misconfigured?)
-                break                               # if so, no need to look at other hosts on this network
-
-    # go make notes on all the hosts' interfaces
-    for hostname, host in sorted( cluster.hosts.items() ):
-        for name, ipobj in sorted( host.ipifs.items() ):
-            ipobj.gateway = gateways[ipobj.network]
+#    print(targets)
+#    gateways = {}   # dict of {network:gateway}
+#    for network, hostlist in clusternets.items():                   # go through the list of networks
+#        for host in hostlist:
+#            target_ip = targets[network]                            # get the target for this host
+#            # ip route get "target" returns "172.172.2.3 via 172.172.1.1 dev ens2 src 172.172.1.200"
+#            # which is 'target "via" gateway "dev" interface "src" source_ip
+#            cmd = ["ssh", host.name, "sudo", "ip", "route", "get", target_ip]
+#
+#            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#            ret = p.wait()
+#            for line in p.stdout:
+#                linelist = line.split()
+#                if linelist[0] == target_ip and linelist[1] == "via":
+#                    gateways[network] = linelist[2]
+#                    break                   # all hosts on the same network should have the same gateway (not in GPG networks!)
+#            
+#            if gateways.get( network ) != None:     # make sure we got one, if not try another host (host misconfigured?)
+#                break                               # if so, no need to look at other hosts on this network
+#
+#    print(gateways)
+#    # go make notes on all the hosts' interfaces
+#    for hostname, host in sorted( cluster.hosts.items() ):
+#        for name, ipobj in sorted( host.ipifs.items() ):
+#            print(f"{hostname}/{name}")
+#            ipobj.gateway = gateways[ipobj.network]
 
 
 
@@ -1140,6 +1184,7 @@ for hostname, host in sorted( cluster.hosts.items() ):
 
     # adjust for new weka versions allowing more than 2 ip interfaces
     temp = host.wekaversion.split('.')
+    print(f"host.wekaversion={host.wekaversion}")
     major = int(temp[0])
     minor = int(temp[1])
     if major >= 3 and minor >= 10:
@@ -1187,7 +1232,7 @@ if args.verbose:
 num_hosts=len(cluster.hosts) 
 
 # handle the special case of 6 hosts separately, so it's clear what we're doing
-if num_hosts == 6:      # special case - this is the only case where we support 1 spare (6-node clusters)
+if num_hosts == 5 or num_hosts == 6 :      # special case - this is the only case where we support 1 spare (6-node clusters)
     cluster.parity = 2
     cluster.data = 3
     if args.verbose:
@@ -1232,6 +1277,8 @@ print()
 
 if args.outputfile != None:
     outputfile = open( args.outputfile, "w" )
+else:
+    outputfile = None
 
 cmd = [ "weka", "cluster", "create" ] 
 for hostname, host in sorted( cluster.hosts.items() ):
@@ -1390,7 +1437,7 @@ cmd = ["weka", "cluster", "start-io"]
 if not write_output( cmd ):
     sys.exit( "I/O error on output" )
 
-if args.outputfile != None:
+if outputfile != None:
     outputfile.close()
 
 print( "Process complete." )
