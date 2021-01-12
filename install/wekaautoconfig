@@ -629,7 +629,7 @@ for hostname, host in cluster.hosts.items():
 
 # make sure they're all at the same version.  This should never happen, but... ya never know, and it's easy to check
 baseversion=None
-for hostname, host in serverinfo.hosts.items():
+for hostname, host in cluster.hosts.items():
     if baseversion == None:
         baseversion = host.wekaversion
     else:
