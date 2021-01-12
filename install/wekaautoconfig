@@ -625,11 +625,12 @@ for hostname, host in cluster.hosts.items():
 
     keylist = list(hostconfig.keys())
     host.wekaversion = hostconfig[keylist[0]]['version']
-    print(f"host {hostname} is version {host.wekaversion}")
+    if args.verbose:
+        print(f"host {hostname} is version {host.wekaversion}")
 
 # make sure they're all at the same version.  This should never happen, but... ya never know, and it's easy to check
 baseversion=None
-for hostname, host in serverinfo.hosts.items():
+for hostname, host in cluster.hosts.items():
     if baseversion == None:
         baseversion = host.wekaversion
     else:
@@ -637,6 +638,10 @@ for hostname, host in serverinfo.hosts.items():
             print("Version mismatch: not all hosts are at the same version. {} != {}".format(baseversion,host.wekaversion))
             print("aborting")
             sys.exit(1)
+
+print()
+print(f"Configuring weka cluster version {baseversion}")
+print()
 
 # drives
 for hostname, host in serverinfo.hosts.items():
@@ -1184,7 +1189,7 @@ for hostname, host in sorted( cluster.hosts.items() ):
 
     # adjust for new weka versions allowing more than 2 ip interfaces
     temp = host.wekaversion.split('.')
-    print(f"host.wekaversion={host.wekaversion}")
+    #print(f"host.wekaversion={host.wekaversion}")
     major = int(temp[0])
     minor = int(temp[1])
     if major >= 3 and minor >= 10:
