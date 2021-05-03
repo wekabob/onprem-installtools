@@ -507,21 +507,25 @@ def announce( text ):
 # main()
 #
 
-
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("host", help="a hostname; 5 or more are required to create a Weka cluster", nargs='+' )
 parser.add_argument("--debug", dest='debug', action='store_true', help="enable debug output")
 parser.add_argument("--verbose", dest='verbose', action='store_true', help="enable verbose output")
-parser.add_argument("-o", "--outputfile", dest='outputfile', default=None, help="place commands in outputfile as they are executing")
+parser.add_argument("--outputfile", "-o", dest='outputfile', default=None, help="place commands in outputfile as they are executing")
+parser.add_argument("--force", "-f", dest='force', action='store_true', help="force run even when hosts are found to be non-homogenous")
+parser.add_argument("--ignoreifs", dest='ignoreifs',default="", help="comma separated list of ip interfaces to ignore")
 args = parser.parse_args()
+
+args.ignoreifs = args.ignoreifs.split(",")
+if args.debug or args.verbose: 
+    print("ignoring ip interfaces: " + str(args.ignoreifs))
 
 if len(args.host) < 5 and not args.debug:
     print( "A minimum of 5 hosts must be specified." )
     sys.exit( 1 )
 
 debug = args.debug
-
 
 #
 # read in the hostnames
@@ -729,7 +733,7 @@ for hostname, host in serverinfo.hosts.items():
         interface=netconfig[name]
         # only note valid interfaces - ignore others.
         # this may include the server management interface (if it's jumbo frame), so we have to be mindful of that...
-        if interface["mtu"] > 4000 and interface["ip4"] != "" and interface["validationCode"] == "OK" and interface["linkDetected"] == True:
+        if (not name in args.ignoreifs) and interface["mtu"] > 4000 and interface["ip4"] != "" and interface["validationCode"] == "OK" and interface["linkDetected"] == True:
             if_obj = IPInterface( name, interface["linkLayer"], interface["ip4"], interface["mtu"], interface["device"], interface["speedMbps"] )      # create object
             host.ipifs[name] = if_obj
 
@@ -803,49 +807,66 @@ reference_host = list(serverinfo.hosts.values())[0]            # actually now a 
 # loop through all hosts and look for anything different from the reference host
 for hostname, host in serverinfo.hosts.items():
     # the easy stuff - same cores & memory?  Number of ip interfaces and drives?
-
-    if ((reference_host.total_cores != host.total_cores) or (reference_host.usable_cores != host.usable_cores) or 
-            (int(reference_host.memory/100) != int(host.memory/100)) or 
-            (int(reference_host.usable_mem/100) != int(host.usable_mem/100)) or 
-            (len( reference_host.ipifs ) != len( host.ipifs )) or (len( reference_host.drives ) != len( host.drives ))):
-        is_identical = False
-        print( "There appears to be a mismatch between this host and the Reference Host:" )
-        print( "Hostname " + host.name + "(ref=" + reference_host.name + ")" )
-        print( "Host Memory = " + str( host.memory ) + "/" + str( reference_host.memory ) )
-        print( "Host Usable Memory = " + str( host.usable_mem ) + "/" + str( reference_host.usable_mem ) )
-        print( "Host total cores = " + str( host.total_cores ) + "/" + str( reference_host.total_cores ) )
-        print( "Usable cores = " + str( host.usable_cores ) + "/" + str( reference_host.usable_cores ) )
-        print( "IPS = " + str( len( host.ipifs ) ) + "/" + str( len( reference_host.ipifs ) ) )
-        print( "Drives = " + str( len( host.drives ) ) + "/" + str( len( reference_host.drives ) ) )
-        print()
-        print( "All hosts need to be identical" )
-        print( "Please check your configuration and try again" )
+    corediff = reference_host.total_cores != host.total_cores
+    usable_corediff = reference_host.usable_cores != host.usable_cores
+    memdiff = (int(reference_host.memory/100) != int(host.memory/100))
+    usable_memdiff = (int(reference_host.usable_mem/100) != int(host.usable_mem/100))
+    drivediff = len( reference_host.drives ) != len( host.drives )
+    ipifsdiff = len( reference_host.ipifs ) != len( host.ipifs )
+    ipif_name_diff = False
+    ipif_detail_diff = False
 
     # check if all ip interfaces are the same
     for interface in host.ipifs:
         if interface not in reference_host.ipifs:
             is_identical = False
+            ipif_name_diff = True
         # ok, it's present, but is it the SAME?
         # this should print( out anything that's different. )
-        if host.ipifs[interface].ifname != reference_host.ipifs[interface].ifname:  #is that even possible?
+        elif host.ipifs[interface].ifname != reference_host.ipifs[interface].ifname:  #is that even possible?
             is_identical = False
+            ipif_name__diff = True
         elif host.ipifs[interface].linklayer != reference_host.ipifs[interface].linklayer:
+            ipif_detail_diff = True
             is_identical = False
         elif host.ipifs[interface].mtu != reference_host.ipifs[interface].mtu:
             is_identical = False
+            ipif_detail_diff = True
         elif host.ipifs[interface].gateway != reference_host.ipifs[interface].gateway:
             is_identical = False
+            ipif_detail_diff = True
         elif host.ipifs[interface].netmask != reference_host.ipifs[interface].netmask:
             is_identical = False
+            ipif_detail_diff = True
         elif host.ipifs[interface].network != reference_host.ipifs[interface].network:
             is_identical = False
+            ipif_detail_diff = True
         elif host.ipifs[interface].speed != reference_host.ipifs[interface].speed:
             is_identical = False
+            ipif_detail_diff = True
     
     # check if all drives are the same
+    if args.debug: print (host.drives)
     for drive in host.drives:
         if drive not in reference_host.drives:
             is_identical = False
+            drivediff = True
+
+    
+    if (corediff or usable_corediff or memdiff or usable_memdiff or drivediff or ipifsdiff or ipif_detail_diff or ipif_name_diff):
+        is_identical = False
+        print()
+        print( "Host mismatch - all hosts need to be identical.   Check your configuration.  Details:")
+        print( "Host " + host.name + " doesn't match reference host (" + reference_host.name + "). Mismatches found:")
+        if memdiff: print( "Host Memory: " + str( host.memory ) + " != " + str( reference_host.memory ) )
+        if usable_memdiff: print( "Host Usable Memory: " + str( host.usable_mem ) + " != " + str( reference_host.usable_mem ) )
+        if corediff: print( "Host total cores: " + str( host.total_cores ) + " != " + str( reference_host.total_cores ) )
+        if usable_corediff: print( "Usable cores: " + str( host.usable_cores ) + " != " + str( reference_host.usable_cores ) )
+        if ipifsdiff or ipif_detail_diff or ipif_name_diff: 
+            print( "IP interfaces: qty(" + str( len( host.ipifs ) ) + ")" + str( list(host.ipifs.keys()) ) + " != qty(" + 
+                    str( len( reference_host.ipifs ) ) + ")" + str( list(reference_host.ipifs.keys()) ))
+            if ipif_detail_diff: print("ip interface details differ (network, netmask, mtu, etc)")
+        if drivediff: print( "Drives: " + str( len( host.drives ) ) + " != " + str( len( reference_host.drives ) ) )
 
 # are the above tests sufficient to determine if they're identical?
 #  possible additions - verify drive sizes are same, network topologies are same, etc
@@ -855,7 +876,7 @@ if is_identical:
     homogenous = True
     if args.verbose:
         print( "Configuring homogenous cluster" )
-else:
+elif not args.force:
     print( "Cluster hosts do not appear to be homogenous.  Aborting auto-config" )
     sys.exit( 1 )
 
@@ -1379,8 +1400,9 @@ cmd = ["weka", "cluster", "drive", "scan"]
 if not write_output( cmd ):
     sys.exit( "I/O error on output" )
 
-if not write_output( ["sleep", "60"] ):
-    sys.exit( "I/O error on output" )
+# removed for 3.11
+#if not write_output( ["sleep", "60"] ):
+#    sys.exit( "I/O error on output" )
 
 
 if cluster.isdedicated:
@@ -1433,7 +1455,9 @@ if not write_output( ["sleep", "60"] ):
     sys.exit( "I/O error on output" )
 
 # weka cluster drive activate
-cmd = ["weka", "cluster", "drive", "activate"]
+# changed for 3.11 to host activate
+#cmd = ["weka", "cluster", "drive", "activate"]
+cmd = ["weka", "cluster", "host", "activate"]
 if not write_output( cmd ):
     sys.exit( "I/O error on output" )
 
