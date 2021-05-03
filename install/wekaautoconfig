@@ -853,7 +853,8 @@ for hostname, host in serverinfo.hosts.items():
             drivediff = True
 
     
-    if (corediff or usable_corediff or memdiff or usable_memdiff or drivediff or ipifsdiff or ipif_detail_diff or ipif_name_diff):
+    if (corediff or usable_corediff or memdiff or usable_memdiff or drivediff or
+            ipifsdiff or ipif_detail_diff or ipif_name_diff):
         is_identical = False
         print()
         print( "Host mismatch - all hosts need to be identical.   Check your configuration.  Details:")
