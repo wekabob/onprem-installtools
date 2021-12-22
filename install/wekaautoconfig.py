@@ -1237,12 +1237,12 @@ if args.verbose:
 num_hosts=len(cluster.hosts) 
 
 # handle the special case of 6 hosts separately, so it's clear what we're doing
-if num_hosts == 5 or num_hosts == 6 :      # special case - this is the only case where we support 1 spare (6-node clusters)
-    cluster.parity = 2
-    cluster.data = 3
-    if args.verbose:
-        print( "Cluster size is 6; forcing 3+2 Stripe Width" )
-else:
+#if num_hosts == 5 or num_hosts == 6 :      # special case - this is the only case where we support 1 spare (6-node clusters)
+#    cluster.parity = 2
+#    cluster.data = 3
+#    if args.verbose:
+#       print( "Cluster size is 6; forcing 3+2 Stripe Width" )
+#else:
 
     num_parity = 2
     cluster.parity = num_parity
